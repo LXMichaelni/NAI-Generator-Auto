@@ -122,9 +122,20 @@ class GenerationPageViewmodel extends ChangeNotifier {
 
     // Generate, postprocess and save image
     commandFunc() async {
-      final endpoint = payloadConfig.settings.debugApiEnabled
-          ? payloadConfig.settings.debugApiPath
-          : 'https://image.novelai.net/ai/generate-image';
+      final String endpoint;
+      final String requestProxy;
+      if (payloadConfig.settings.sentryProxyEnabled) {
+        final base = payloadConfig.settings.sentryProxyBaseUrl
+            .replaceAll(RegExp(r'/+$'), '');
+        endpoint = '$base/ai/generate-image';
+        requestProxy = ''; // 反代启用时 sentry 承担 VPN 出网, 本次请求不走自身代理
+      } else if (payloadConfig.settings.debugApiEnabled) {
+        endpoint = payloadConfig.settings.debugApiPath;
+        requestProxy = payloadConfig.settings.proxy;
+      } else {
+        endpoint = 'https://image.novelai.net/ai/generate-image';
+        requestProxy = payloadConfig.settings.proxy;
+      }
 
       // Check whether cached payload exists, use cache if exists
       PayloadGenerationResult payloadResult;
@@ -142,7 +153,7 @@ class GenerationPageViewmodel extends ChangeNotifier {
       final timeoutSec = payloadConfig.settings.apiTimeoutSec;
       final request = ApiRequest(
         endpoint: endpoint,
-        proxy: payloadConfig.settings.proxy,
+        proxy: requestProxy,
         headers: payloadConfig.getHeaders(),
         payload: payloadResult.payload,
         timeout: timeoutSec > 0 ? Duration(seconds: timeoutSec) : null,

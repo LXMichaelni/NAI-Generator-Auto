@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:http/http.dart' as http;
 import 'package:nai_casrand/core/constants/settings.dart';
 import 'package:nai_casrand/data/models/payload_config.dart';
 import 'package:nai_casrand/data/models/settings.dart';
@@ -25,6 +26,42 @@ class SettingsPageViewmodel extends ChangeNotifier {
   void setApiKey(String value) {
     payloadConfig.settings.apiKey = value;
     notifyListeners();
+  }
+
+  void setSentryProxyEnabled(bool? value) {
+    if (value == null) return;
+    payloadConfig.settings.sentryProxyEnabled = value;
+    notifyListeners();
+  }
+
+  void setSentryProxyBaseUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    payloadConfig.settings.sentryProxyBaseUrl = trimmed;
+    notifyListeners();
+  }
+
+  Future<void> testSentryProxy(BuildContext context) async {
+    final base = payloadConfig.settings.sentryProxyBaseUrl
+        .replaceAll(RegExp(r'/+$'), '');
+    final url = Uri.parse('$base/token');
+    try {
+      final resp = await http
+          .get(url)
+          .timeout(const Duration(seconds: 3));
+      if (!context.mounted) return;
+      if (resp.statusCode == 200 && resp.body.trim().isNotEmpty) {
+        final preview = resp.body.trim();
+        final short = preview.length > 20 ? '${preview.substring(0, 20)}...' : preview;
+        showInfoBar(context, '${tr('sentry_proxy_test_ok')} ($short)');
+      } else {
+        showErrorBar(
+            context, '${tr('sentry_proxy_test_fail')}: HTTP ${resp.statusCode}');
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      showErrorBar(context, '${tr('sentry_proxy_test_fail')}: $e');
+    }
   }
 
   void setBatchCount(String value) {

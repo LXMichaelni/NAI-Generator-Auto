@@ -25,6 +25,10 @@ class Settings {
   String debugApiPath;
   bool debugApiEnabled;
 
+  // Sentry 反向代理（反代劫持）
+  bool sentryProxyEnabled;
+  String sentryProxyBaseUrl;
+
   // Image metadata erase
   bool metadataEraseEnabled;
   bool customMetadataEnabled;
@@ -57,6 +61,8 @@ class Settings {
     required this.proxy,
     required this.debugApiEnabled,
     required this.debugApiPath,
+    required this.sentryProxyEnabled,
+    required this.sentryProxyBaseUrl,
     required this.metadataEraseEnabled,
     required this.customMetadataEnabled,
     required this.customMetadataContent,
@@ -84,6 +90,9 @@ class Settings {
       proxy: json['proxy'] ?? '',
       debugApiEnabled: false,
       debugApiPath: 'http://localhost:5000/ai/generate-image',
+      sentryProxyEnabled: json['sentry_proxy_enabled'] ?? false,
+      sentryProxyBaseUrl:
+          json['sentry_proxy_base_url'] ?? 'http://localhost:7899',
       metadataEraseEnabled: json['metadata_erase_enabled'] ?? false,
       customMetadataEnabled: json['custom_metadata_enabled'] ?? false,
       customMetadataContent:
@@ -129,6 +138,8 @@ class Settings {
       'generation_page_column_count': generationPageColumnCount,
       'generation_page_max_items': generationPageMaxItems,
       'theme_mode': themeMode,
+      'sentry_proxy_enabled': sentryProxyEnabled,
+      'sentry_proxy_base_url': sentryProxyBaseUrl,
     };
   }
 

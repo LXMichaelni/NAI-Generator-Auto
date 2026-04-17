@@ -24,11 +24,12 @@ class SettingsPageView extends StatelessWidget {
         builder: (context, viewmodel, child) => Column(
           children: [
             _buildApiKeyTile(),
+            _buildSentryProxyTile(context),
             _buildBatchTile(),
             _buildEraseMetadataTile(context),
             if (!kIsWeb && Platform.isWindows) _buildOutputSelectionTile(),
             _buildPrefixKeyTile(),
-            if (!kIsWeb) _buildProxyTile(),
+            if (!kIsWeb) _buildProxyTile(context),
             _buildBarkTokenTile(),
             _buildBarkAuthFailTile(),
             _buildBarkAuthFailCooldownTile(),
@@ -69,6 +70,14 @@ class SettingsPageView extends StatelessWidget {
   }
 
   Widget _buildApiKeyTile() {
+    if (viewmodel.settings.sentryProxyEnabled) {
+      return ListTile(
+        leading: const Icon(Icons.token_outlined),
+        title: Text(tr('NAI_API_key')),
+        subtitle: Text(tr('sentry_proxy_api_key_hijacked')),
+        enabled: false,
+      );
+    }
     return EditableListTile(
         leading: const Icon(Icons.token_outlined),
         title: tr('NAI_API_key'),
@@ -76,6 +85,49 @@ class SettingsPageView extends StatelessWidget {
         currentValue: viewmodel.settings.apiKey,
         confirmOnSubmit: true,
         onEditComplete: (value) => viewmodel.setApiKey(value));
+  }
+
+  Widget _buildSentryProxyTile(BuildContext context) {
+    final enabled = viewmodel.settings.sentryProxyEnabled;
+    return ExpansionTile(
+      leading: const Icon(Icons.vpn_lock_outlined),
+      title: Text(tr('sentry_proxy_section')),
+      subtitle: Text(enabled
+          ? tr('sentry_proxy_enabled_subtitle')
+          : tr('sentry_proxy_disabled_subtitle')),
+      initiallyExpanded: enabled,
+      children: [
+        CheckboxListTile(
+          secondary: const Icon(Icons.swap_horiz),
+          title: Text(tr('sentry_proxy_toggle')),
+          subtitle: Text(tr('sentry_proxy_toggle_hint')),
+          value: enabled,
+          onChanged: (value) => viewmodel.setSentryProxyEnabled(value),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: EditableListTile(
+            leading: const Icon(Icons.link),
+            title: tr('sentry_proxy_base_url'),
+            notice: tr('sentry_proxy_base_url_hint'),
+            currentValue: viewmodel.settings.sentryProxyBaseUrl,
+            confirmOnSubmit: true,
+            onEditComplete: (value) => viewmodel.setSentryProxyBaseUrl(value),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 20, bottom: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.network_ping),
+              label: Text(tr('sentry_proxy_test')),
+              onPressed: () => viewmodel.testSentryProxy(context),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildBatchTile() {
@@ -248,9 +300,18 @@ class SettingsPageView extends StatelessWidget {
     );
   }
 
-  Widget _buildProxyTile() {
+  Widget _buildProxyTile(BuildContext context) {
     if (kIsWeb) return const SizedBox.shrink();
     final proxy = viewmodel.settings.proxy;
+    if (viewmodel.settings.sentryProxyEnabled) {
+      return ListTile(
+        leading: const Icon(Icons.route),
+        title: Text(tr('proxy_settings')),
+        subtitle: Text(
+            '${proxy == '' ? tr('proxy_settings_direct') : proxy} · ${tr('sentry_proxy_overrides_proxy')}'),
+        enabled: false,
+      );
+    }
     return EditableListTile(
       leading: const Icon(Icons.route),
       title: tr('proxy_settings'),

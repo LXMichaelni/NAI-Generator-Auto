@@ -35,9 +35,12 @@ class PayloadConfig {
   });
 
   Map<String, String> getHeaders() {
+    final auth = settings.sentryProxyEnabled
+        ? 'Bearer sentry-placeholder'
+        : 'Bearer ${settings.apiKey}';
     return {
       "content-type": "application/json",
-      "authorization": "Bearer ${settings.apiKey}",
+      "authorization": auth,
       "referer": "https://novelai.net",
       "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0"
