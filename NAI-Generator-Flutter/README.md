@@ -33,6 +33,7 @@
 - [Sentry 反代劫持](#sentry-反代劫持)
 - [支持平台](#支持平台)
 - [从源码构建](#从源码构建)
+- [缓存清理指南](#缓存清理指南)
 - [项目目录](#项目目录)
 - [CI/CD](#cicd)
 - [常见问题](#常见问题)
@@ -382,6 +383,131 @@ flutter build apk --dart-define-from-file=secrets.json
 ```
 
 Windows 用户也可以直接双击根目录下的 `run_windows.bat` 或 `build_windows.bat`。
+
+## 缓存清理指南
+
+Flutter 在构建过程中会生成大量缓存和中间文件。当你遇到以下问题时，通常需要清理缓存：
+
+- 移动了项目目录后构建报错（符号链接指向旧路径）
+- 插件符号链接冲突（`PathExistsException: Cannot create link, errno = 183`）
+- 修改了代码但运行后没有变化
+- 升级 Flutter SDK 后构建失败
+- 切换分支后出现莫名其妙的编译错误
+
+### 快速清理（推荐）
+
+```bash
+# 一键清理：删除所有构建缓存并重新拉取依赖
+flutter clean && flutter pub get
+```
+
+这条命令会自动清除 `build/`、`.dart_tool/`、各平台的 `ephemeral/` 目录。
+
+### 深度清理（解决顽固问题）
+
+如果 `flutter clean` 不够，手动删除以下目录：
+
+```bash
+# Windows PowerShell
+Remove-Item -Recurse -Force build
+Remove-Item -Recurse -Force .dart_tool
+Remove-Item -Recurse -Force windows\flutter\ephemeral
+Remove-Item -Recurse -Force linux\flutter\ephemeral
+
+# 然后重新拉取依赖
+flutter pub get
+```
+
+```bash
+# macOS / Linux (bash)
+rm -rf build .dart_tool
+rm -rf windows/flutter/ephemeral
+rm -rf linux/flutter/ephemeral
+rm -rf macos/Flutter/ephemeral
+rm -rf ios/Flutter/ephemeral
+flutter pub get
+```
+
+### 使用 bat 脚本清理（Windows）
+
+```bash
+# run_windows.bat 支持 clean 参数，会自动清理后再运行
+./run_windows.bat clean
+```
+
+### 各缓存目录详解
+
+| 目录 / 文件 | 大小 | 说明 | 清理方式 |
+| --- | --- | --- | --- |
+| `build/` | 数百 MB | 编译产物（CMake 输出、.obj、.exe 等） | `flutter clean` 自动清除 |
+| `.dart_tool/` | ~50 KB | Dart 包解析配置、插件注册代码 | `flutter clean` 自动清除 |
+| `windows/flutter/ephemeral/` | ~300 MB | Windows 引擎二进制（flutter_windows.dll）+ 插件符号链接 | `flutter clean` 自动清除；**符号链接冲突时必须手动删除** |
+| `linux/flutter/ephemeral/` | ~1 MB | Linux 插件符号链接 | `flutter clean` 自动清除 |
+| `macos/Flutter/ephemeral/` | ~1 KB | macOS 生成的 Xcode 配置 | `flutter clean` 自动清除 |
+| `ios/Flutter/ephemeral/` | ~1 KB | iOS 生成的 LLDB 辅助脚本 | `flutter clean` 自动清除 |
+| `windows/flutter/generated_*.cc/.h/.cmake` | ~10 KB | 自动生成的插件注册代码 | `flutter pub get` 重新生成 |
+| `linux/flutter/generated_*.cc/.h/.cmake` | ~10 KB | 同上（Linux 版） | `flutter pub get` 重新生成 |
+| `.flutter-plugins-dependencies` | ~16 KB | 插件依赖映射 JSON | `flutter pub get` 重新生成 |
+| `android/.gradle/` | 数十 MB | Gradle 构建缓存 | 手动删除：`rm -rf android/.gradle` |
+| `android/local.properties` | ~60 B | 本地 SDK 路径（机器相关） | 手动删除后 `flutter pub get` 重新生成 |
+| `pubspec.lock` | ~31 KB | 依赖锁定文件 | **不要删除**，这是版本锁定文件，应该提交到 Git |
+
+### 符号链接冲突（errno = 183）专项修复
+
+这是 Windows 上最常见的缓存问题，通常发生在项目目录移动后：
+
+```
+PathExistsException: Cannot create link, path =
+'...\windows\flutter\ephemeral\.plugin_symlinks\device_info_plus'
+(OS Error: 当文件已存在时，无法创建该文件。, errno = 183)
+```
+
+原因：`ephemeral/.plugin_symlinks/` 下的符号链接仍指向旧的 pub cache 路径，Flutter 尝试创建同名新链接时冲突。
+
+修复：
+
+```powershell
+# 删除 ephemeral 目录（包含所有旧符号链接）
+Remove-Item -Recurse -Force windows\flutter\ephemeral
+
+# 重新清理并拉取
+flutter clean
+flutter pub get
+
+# 再次运行
+flutter run -d windows
+```
+
+或者直接用 bat 脚本：
+
+```bash
+./run_windows.bat clean
+```
+
+### 完整核弹级清理（万不得已）
+
+如果以上方法都不行，执行完整重置：
+
+```powershell
+# 1. 删除所有生成目录
+Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .dart_tool -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force windows\flutter\ephemeral -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force linux\flutter\ephemeral -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force android\.gradle -ErrorAction SilentlyContinue
+
+# 2. 删除生成的插件注册文件
+Remove-Item -Force windows\flutter\generated_plugin_registrant.cc -ErrorAction SilentlyContinue
+Remove-Item -Force windows\flutter\generated_plugin_registrant.h -ErrorAction SilentlyContinue
+Remove-Item -Force windows\flutter\generated_plugins.cmake -ErrorAction SilentlyContinue
+
+# 3. 删除插件依赖映射
+Remove-Item -Force .flutter-plugins-dependencies -ErrorAction SilentlyContinue
+
+# 4. 重新拉取依赖并构建
+flutter pub get
+flutter run -d windows
+```
 
 ## 项目架构
 
