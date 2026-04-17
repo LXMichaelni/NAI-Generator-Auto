@@ -24,12 +24,17 @@
 - [简介](#简介)
 - [核心特性](#核心特性)
 - [界面展示](#界面展示)
+- [环境配置](#环境配置)
 - [快速上手](#快速上手)
+- [业务流程](#业务流程)
+- [前端页面结构](#前端页面结构)
+- [项目架构](#项目架构)
 - [Prompts 级联配置](#prompts-级联配置)
 - [Sentry 反代劫持](#sentry-反代劫持)
 - [支持平台](#支持平台)
 - [从源码构建](#从源码构建)
-- [项目结构](#项目结构)
+- [项目目录](#项目目录)
+- [CI/CD](#cicd)
 - [常见问题](#常见问题)
 - [许可证](#许可证)
 
@@ -74,6 +79,50 @@
 
 ## 快速上手
 
+### 0. 环境配置
+
+#### 必需环境
+
+| 工具 | 版本要求 | 说明 |
+| --- | --- | --- |
+| Flutter SDK | ≥ 3.3.4（stable） | 包含 Dart SDK ≥ 3.3 |
+| Git | 任意 | 克隆仓库 |
+
+#### 各平台额外依赖
+
+| 平台 | 额外依赖 |
+| --- | --- |
+| Windows | Visual Studio 2022 + "Desktop development with C++" 工作负载 |
+| Android | Android Studio + Android SDK（compileSdk 35, minSdk 23）；真机或模拟器 |
+| Web | Chrome 浏览器（`flutter run -d chrome`） |
+| macOS | Xcode ≥ 14 + CocoaPods |
+| Linux | `clang`, `cmake`, `ninja-build`, `pkg-config`, `libgtk-3-dev`（Ubuntu/Debian） |
+
+#### 首次运行
+
+```bash
+git clone <repo-url>
+cd NAI-Generator-Flutter
+flutter pub get          # 拉取依赖
+flutter run -d windows   # 或 chrome / android 等
+```
+
+Windows 用户也可以直接双击 `run_windows.bat`（脚本会自动定位项目目录）。
+
+> `run_windows.bat` 和 `build_windows.bat` 中的 `FLUTTER_ROOT` 默认指向 `D:\Software\flutter`，如果你的 Flutter 安装路径不同，需要修改脚本第 4 行。
+
+#### 编译时密钥（可选）
+
+CI/CD 和正式构建使用 `--dart-define-from-file=secrets.json` 注入以下编译时常量：
+
+| 键 | 用途 |
+| --- | --- |
+| `ASSET_KEY_BASE64` | AES 密钥，用于解密捐赠二维码等加密资源 |
+| `ASSET_IV_BASE64` | AES IV |
+| `GITHUB_REPO_LINK` | 关于页面中的 GitHub 仓库链接 |
+
+本地开发不提供 `secrets.json` 也能正常运行，只是加密资源无法解密、关于页面链接为空。
+
 ### 1. 填写 Token
 
 进入 **参数设置** 页面，填入 NovelAI 的 API Token。
@@ -104,6 +153,131 @@
 导出的 JSON 是跨平台的，可以在 PC Web 端精心编辑完，再同步到手机上批量生图。
 
 > 导入时会自动校验 JSON 格式完整性（检查 `prompt_config` 等必要字段），如果文件损坏或格式不兼容会显示错误提示，不会导致崩溃。
+
+## 业务流程
+
+### 核心生图流程
+
+```
+用户点击「开始」
+  │
+  ▼
+GenerationPageViewmodel.startBatch()
+  │  设置 CommandStatus.isBatchActive = true
+  │
+  ▼  ┌─────────────── 批次循环 ───────────────┐
+  │  │                                         │
+  │  ▼                                         │
+  │  GeneratePayloadUseCase.call()             │
+  │    ├─ PromptConfig.getPrmpts()             │
+  │    │    递归遍历 Config 树，按选取策略       │
+  │    │    （随机/顺序/概率/数量/全部）         │
+  │    │    选取词条，拼接 prompt                │
+  │    ├─ CharacterConfig.getPrompt()          │
+  │    │    生成角色 prompt + 位置映射           │
+  │    ├─ ParamConfig.getPayload()             │
+  │    │    组装生成参数（model/steps/sampler…） │
+  │    ├─ 附加 Vibe Transfer 配置              │
+  │    └─ 返回 PayloadGenerationResult         │
+  │         { payload, comment, fileName }     │
+  │                                            │
+  │  ▼                                         │
+  │  ApiService.fetchData()                    │
+  │    POST → image.novelai.net (或 sentry 反代)│
+  │    Bearer Token 认证                       │
+  │    可配超时（默认 60s）                     │
+  │                                            │
+  │  ▼                                         │
+  │  ImageService.processResponse()            │
+  │    解压 ZIP → 提取 image_0.png             │
+  │                                            │
+  │  ▼                                         │
+  │  ImageService.embedMetadata() (可选)       │
+  │    隐写术嵌入自定义元数据到 PNG alpha 通道   │
+  │                                            │
+  │  ▼                                         │
+  │  FileService.savePictureToFile()           │
+  │    Web → 浏览器下载                         │
+  │    Android → SaverGallery 保存到相册        │
+  │    Windows → 写入指定目录                   │
+  │                                            │
+  │  ▼                                         │
+  │  创建 InfoCardContent → 瀑布流展示          │
+  │                                            │
+  │  ▼  批次内延迟（innerInterval + jitter）    │
+  │  └──────────── 下一张 ────────────────────┘
+  │
+  ▼  批次间冷却（interval + jitter）
+  └──── 下一批次（直到达到总数或用户停止）
+```
+
+### 错误处理
+
+| HTTP 状态码 | 处理方式 |
+| --- | --- |
+| 401 Unauthorized | 停止批次，显示认证失败提示；如果开启了 Bark 推送，发送通知到手机 |
+| 429 Too Many Requests | 记录日志，显示限流提示，自动跳过当前请求继续下一张 |
+| 超时 | 自动跳过，继续下一张（最多重试 3 次） |
+
+### 配置持久化流程
+
+```
+导出：PayloadConfig.toJson() → JSON 字符串 → 文件保存（FileService）
+导入：文件读取 → JSON 解析 → schema 校验（检查 prompt_config 键）
+      → PayloadConfig.fromJson()（所有字段有默认值兜底）
+      → 写入 Hive（ConfigService.saveConfig()）
+
+本地存储：Hive box "savedBox"
+  ├─ configIndex: { uuid → { title, timestamp } }  配置索引
+  └─ savedConfig-{uuid}: JSON string               单份配置
+```
+
+## 前端页面结构
+
+应用共 3 个主页面，通过底部导航栏（窄屏）或侧边导航栏（宽屏 ≥ 640px）切换，使用 `IndexedStack` 缓存页面状态：
+
+### 页面 1：图像生成（GenerationPageView）
+
+- 瀑布流网格展示已生成的图片（`WaterfallFlow`，可调列数）
+- 批次进度条（当前批次 / 总数）
+- 3 个浮动按钮：
+  - 🔧 显示设置（列数、清空列表、覆盖 prompt 开关）
+  - ➕ 仅生成 prompt 预览（不调 API）
+  - ▶️/⏹ 开始 / 停止批量生成
+- 点击图片卡片查看大图、prompt 详情、生成参数
+- 支持覆盖 prompt 模式（手动输入 prompt 替代级联生成）
+
+### 页面 2：生成配置（ConfigPageView）
+
+内含 3 个 Tab：
+
+| Tab | 组件 | 功能 |
+| --- | --- | --- |
+| Prompt Config | `PromptTabView` | 编辑级联 prompt 树 + 角色配置（最多 5 个角色，每个有独立 prompt 和位置） |
+| Vibe Transfer | `I2iTabView` | V3 模型：`VibeConfigListView`；V4 模型：`VibeConfigV4ListView`（支持 `.naiv4vibe` 文件和 PNG iTXt 提取） |
+| Generation Parameters | `ParametersConfigView` | 模型选择（6 款）、图片尺寸（多尺寸随机）、采样步数、CFG、采样器、噪声调度器、SMEA/DYN、Variety+、种子、负面提示词 |
+
+### 页面 3：参数设置（SettingsPageView）
+
+| 设置区块 | 内容 |
+| --- | --- |
+| API Token | NovelAI 持久化 Token（sentry 模式下灰显） |
+| Sentry 反代劫持 | 开关 + 反代地址 + 连通测试 |
+| Batch Settings | 每批数量、批次间隔/抖动、批内间隔/抖动、总生成数、瀑布流上限、API 超时 |
+| 元数据 | 擦除开关 + 自定义假元数据嵌入 |
+| 输出目录 | 仅桌面端，指定图片保存路径 |
+| 文件名前缀 | 支持 `__key__` 变量替换（从 prompt 树中提取） |
+| HTTP 代理 | 非 Web 端可配代理 |
+| Bark 推送 | 设备 Key + 认证失败通知开关 + 冷却时间 |
+| 已保存配置 | 管理多套配置（新建/重命名/删除/切换） |
+| 外观 | 主题（亮/暗/跟随系统）、语言（中/英） |
+| 导入/导出 | 浮动按钮：导入/导出全部设置为 JSON 文件 |
+
+### 全局功能
+
+- 拖放图片到窗口 → 自动提取 NAI 隐写元数据 → 弹窗选择导入参数（`MetadataDropArea`）
+- 顶部应用栏动态状态指示：空闲 / 生成中（旋转图标）/ 冷却中（闪烁文字）
+- 响应式布局：窄屏底部导航栏，宽屏侧边 `NavigationRail`
 
 ## Prompts 级联配置
 
@@ -179,9 +353,9 @@ Flutter → POST localhost:7899/ai/generate-image (Bearer sentry-placeholder)
 
 ### 前置条件
 
-- Flutter SDK ≥ **3.3.4**（稳定通道）
+- Flutter SDK ≥ **3.3.4**（稳定通道），CI 使用 **3.29.3**
 - Dart SDK ≥ **3.3**
-- 目标平台对应的构建工具链（Android Studio / Visual Studio Build Tools / Xcode 等）
+- 目标平台对应的构建工具链（见上方 [环境配置](#0-环境配置)）
 
 ### 步骤
 
@@ -198,48 +372,214 @@ flutter run                 # 自动检测默认设备
 flutter run -d chrome       # Web
 flutter run -d windows      # Windows
 
-# 4. 打包发布
+# 4. 打包发布（不含加密资源密钥）
 flutter build windows       # Windows: build/windows/x64/runner/Release/
 flutter build apk --release # Android: build/app/outputs/flutter-apk/
 flutter build web           # Web:     build/web/
-flutter build macos         # macOS
-flutter build linux         # Linux
+
+# 5. 打包发布（含加密资源密钥，需要 secrets.json）
+flutter build apk --dart-define-from-file=secrets.json
 ```
 
 Windows 用户也可以直接双击根目录下的 `run_windows.bat` 或 `build_windows.bat`。
 
-## 项目结构
+## 项目架构
+
+### 整体架构：MVVM + Service Locator
+
+```
+┌─────────────────────────────────────────────────┐
+│                    UI Layer                      │
+│  NavigationView (IndexedStack)                   │
+│  ├─ GenerationPageView ← GenerationPageViewmodel │
+│  ├─ ConfigPageView                               │
+│  │   ├─ PromptTabView ← PromptTabViewmodel       │
+│  │   ├─ I2iTabView ← I2iTabViewmodel             │
+│  │   └─ ParametersConfigView ← viewmodel         │
+│  └─ SettingsPageView ← SettingsPageViewmodel      │
+├─────────────────────────────────────────────────┤
+│                 Use Case Layer                   │
+│  GeneratePayloadUseCase                          │
+├─────────────────────────────────────────────────┤
+│                  Data Layer                      │
+│  Models:   PayloadConfig, PromptConfig,          │
+│            ParamConfig, Settings, ...            │
+│  Services: ApiService, ConfigService,            │
+│            FileService, ImageService,            │
+│            BarkService, LogService               │
+├─────────────────────────────────────────────────┤
+│              Infrastructure                      │
+│  GetIt (DI)  │  Hive (存储)  │  HTTP (网络)     │
+└─────────────────────────────────────────────────┘
+```
+
+### 架构约束
+
+| 规则 | 说明 |
+| --- | --- |
+| DI 统一 GetIt | 所有服务和共享状态通过 `GetIt.I()` 获取，不混用 Provider |
+| ViewModel 无 BuildContext | 构造函数不接收 `BuildContext`，保持 MVVM 分层 |
+| builder 无副作用 | `ListenableBuilder.builder` 中不执行网络请求或状态修改 |
+| IndexedStack 缓存 | 页面切换不重建，保持用户输入状态 |
+| 配置导入校验 | `PayloadConfig.loadJson()` 检查 `prompt_config` 键存在性 |
+| fromJson 默认值兜底 | `PromptConfig.fromJson` 所有字段有 `??` 默认值 |
+| 全量 i18n | 所有用户可见字符串走 `tr()`，不硬编码 |
+
+### 关键数据模型
+
+| 模型 | 职责 |
+| --- | --- |
+| `PayloadConfig` | 根配置对象，聚合所有子配置（prompt、参数、设置、vibe、i2i） |
+| `PromptConfig` | 递归树结构，描述级联随机 prompt 的选取规则 |
+| `ParamConfig` | 生成参数（模型、尺寸、步数、采样器、CFG 等），`getPayload()` 输出 API payload |
+| `Settings` | 应用设置（Token、代理、批次参数、主题、语言等） |
+| `CharacterConfig` | 角色配置（位置、正/负 prompt），最多 5 个 |
+| `VibeConfig` / `VibeConfigV4` | Vibe Transfer 配置（V3 图片引用 / V4 vibe bundle） |
+| `I2IConfig` | 图生图配置（底图、强度、噪声） |
+| `CommandStatus` | 批次运行状态（活跃/冷却/计数），用 `ValueNotifier` 驱动 UI |
+
+### 服务层
+
+| 服务 | 职责 |
+| --- | --- |
+| `ApiService` | HTTP POST 调用 NAI API，支持代理和超时 |
+| `ConfigService` | Hive 持久化：加载/保存/管理多套配置（UUID 索引） |
+| `FileService` | 跨平台文件保存（Web 下载 / Android 相册 / 桌面目录） |
+| `ImageService` | ZIP 解压、缩略图生成、隐写术元数据嵌入/提取 |
+| `BarkService` | Bark 推送通知（认证失败告警） |
+| `LogService` | 日志写入（429 限流、握手异常等） |
+
+### 主要依赖库
+
+| 库 | 用途 |
+| --- | --- |
+| `get_it` | 服务定位器 / 依赖注入 |
+| `hive` | 本地 KV 存储（配置持久化） |
+| `encrypt` | AES 加密（Token 存储、资源解密） |
+| `easy_localization` | 国际化（en / zh-CN） |
+| `adaptive_theme` | 自适应主题（亮/暗/系统） |
+| `flutter_command` | 异步命令模式（ViewModel 中的操作封装） |
+| `waterfall_flow` | 瀑布流网格布局 |
+| `archive` | ZIP 解压（NAI API 返回的图片） |
+| `image` | 图片解码/编码/缩放 |
+| `super_drag_and_drop` | 拖放支持（图片元数据提取） |
+| `file_picker` | 文件选择对话框 |
+| `saver_gallery` | Android 相册保存 |
+| `path_provider` | 平台安全目录获取 |
+| `png_chunks_extract` | PNG chunk 解析（V4 vibe 提取） |
+
+## 项目目录
 
 ```
 NAI-Generator-Flutter/
 ├── lib/
-│   ├── main.dart            # 应用入口
-│   ├── core/                # 核心领域逻辑（prompt 级联、API 调用、加密、存储）
+│   ├── main.dart                    # 应用入口：GetIt 注册、Hive 初始化、主题/i18n 配置
+│   ├── core/
+│   │   └── constants/
+│   │       ├── defaults.dart        # 默认负面提示词、水印内容、文件名前缀、预设尺寸
+│   │       ├── parameters.dart      # 模型列表(6款)、采样器、噪声调度器、元数据键
+│   │       ├── settings.dart        # 主题模式映射
+│   │       └── image_formats.dart   # 拖放支持的图片格式
 │   ├── data/
-│   │   ├── models/          # 数据模型（PayloadConfig, PromptConfig, Settings 等）
-│   │   ├── services/        # 服务层（API, Config, File, Image, Bark, Log）
-│   │   └── use_cases/       # 业务用例（GeneratePayloadUseCase）
-│   └── ui/                  # 各页面与组件（MVVM: view_models/ + widgets/）
-│       ├── generation_page/   # 生图页面
-│       ├── config_page/       # Prompt 配置页面
-│       ├── settings_page/     # 参数设置页面
-│       ├── navigation/        # 底部导航（IndexedStack 缓存页面状态）
-│       ├── parameters_config/ # 参数配置视图
-│       └── vibe_config_v4/    # V4 Vibe Transfer 配置
+│   │   ├── models/
+│   │   │   ├── payload_config.dart  # 根配置（聚合所有子配置）
+│   │   │   ├── prompt_config.dart   # 级联 prompt 树（递归结构）
+│   │   │   ├── param_config.dart    # 生成参数 → API payload
+│   │   │   ├── settings.dart        # 应用设置
+│   │   │   ├── character_config.dart # 角色配置（位置+prompt）
+│   │   │   ├── i2i_config.dart      # 图生图配置
+│   │   │   ├── vibe_config.dart     # Vibe Transfer V3
+│   │   │   ├── vibe_config_v4.dart  # Vibe Transfer V4（.naiv4vibe / PNG iTXt）
+│   │   │   ├── director_tool_config.dart # Director Tools（去背景/线稿/上色/表情…）
+│   │   │   ├── command_status.dart  # 批次运行状态
+│   │   │   ├── api_request.dart     # 请求/响应 DTO
+│   │   │   ├── info_card_content.dart # 瀑布流卡片数据
+│   │   │   └── generation_size.dart # 图片尺寸
+│   │   ├── services/
+│   │   │   ├── api_service.dart     # HTTP POST + 代理 + 超时
+│   │   │   ├── config_service.dart  # Hive 配置管理（UUID 索引）
+│   │   │   ├── file_service.dart    # 跨平台文件保存 + AES 资源解密
+│   │   │   ├── image_service.dart   # ZIP 解压 + 缩略图 + 隐写术
+│   │   │   ├── bark_service.dart    # Bark 推送通知
+│   │   │   └── log_service.dart     # 日志记录
+│   │   └── use_cases/
+│   │       └── generate_payload_use_case.dart  # 核心业务：prompt 生成 + payload 组装
+│   └── ui/
+│       ├── core/                    # 共享 UI 组件
+│       │   ├── utils/flushbar.dart  # SnackBar 通知（info/error/warning）
+│       │   └── widgets/             # EditableListTile, SliderListTile 等
+│       ├── navigation/              # 导航框架
+│       │   ├── widgets/
+│       │   │   ├── navigation_view.dart    # IndexedStack + 响应式导航
+│       │   │   ├── navigation_appbar.dart  # 动态状态应用栏
+│       │   │   ├── metadata_drop_area.dart # 拖放元数据提取
+│       │   │   └── debug_settings_view.dart
+│       │   └── view_models/
+│       ├── generation_page/         # 页面1：生图
+│       │   ├── widgets/
+│       │   │   ├── generation_page_view.dart  # 瀑布流 + FAB 控制
+│       │   │   └── info_card.dart             # 图片卡片
+│       │   └── view_models/
+│       │       └── generation_page_viewmodel.dart  # 批次循环 + API 调用
+│       ├── config_page/             # 页面2：配置（3 Tab）
+│       ├── prompt_tab/              #   Tab1: Prompt 配置
+│       ├── prompt_config/           #     Prompt 树节点编辑
+│       ├── character_config/        #     角色配置
+│       ├── i2i_tab/                 #   Tab2: Vibe Transfer
+│       ├── vibe_config/             #     V3 Vibe
+│       ├── vibe_config_v4/          #     V4 Vibe
+│       ├── parameters_config/       #   Tab3: 生成参数
+│       ├── settings_page/           # 页面3：设置
+│       │   ├── widgets/
+│       │   │   ├── settings_page_view.dart          # 设置主页
+│       │   │   └── config_selection_page_view.dart   # 配置管理页
+│       │   └── view_models/
+│       └── saved_config_list/       # 已保存配置列表
 ├── assets/
-│   ├── appicon.png
-│   ├── json/example.json    # 默认配置示例
-│   └── l10n/                # 多语言资源（en / zh-CN）
-├── android/ ios/ web/ windows/ macos/ linux/   # 各平台壳工程
-├── docs/                    # 文档与截图
-│   ├── CHANGES.md           # 改动记录
-│   ├── PROJECT_OVERVIEW.md  # 项目说明
+│   ├── appicon.png                  # 应用图标
+│   ├── json/example.json            # 默认配置示例
+│   ├── l10n/en.json                 # 英文翻译（206 keys）
+│   ├── l10n/zh-CN.json              # 中文翻译
+│   └── qrcode1.jpg, qrcode2.jpg    # AES 加密的捐赠二维码
+├── android/                         # Android 壳工程（compileSdk 35, minSdk 23）
+├── windows/                         # Windows 壳工程（默认窗口 640×960）
+├── web/ ios/ macos/ linux/          # 其他平台壳工程
+├── .github/workflows/               # CI/CD（见下方）
+├── docs/
+│   ├── CHANGES.md                   # 改动记录
+│   ├── PROJECT_OVERVIEW.md          # 项目说明
 │   └── SENTRY_PROXY_INTEGRATION.md  # Sentry 反代技术文档
-├── pubspec.yaml             # 依赖与资源清单
-├── run_windows.bat          # Windows 一键运行
-├── build_windows.bat        # Windows 一键打包
+├── pubspec.yaml                     # 依赖与资源清单
+├── run_windows.bat                  # Windows 一键运行
+├── build_windows.bat                # Windows 一键打包
 └── README.md
 ```
+
+## CI/CD
+
+项目在 `.github/workflows/` 下配置了 3 条 GitHub Actions 流水线：
+
+| 流水线 | 触发条件 | Runner | 产物 |
+| --- | --- | --- | --- |
+| `android.yml` | push to `main` / 手动 | `ubuntu-latest` | `app-release.apk` |
+| `windows.yml` | push to `main` / 手动 | `windows-latest` | `windows-x64-release.zip` |
+| `web.yml` | push to `main` / 手动 | `ubuntu-latest` | `build/web/`（自动部署到 `deploy` 分支） |
+
+所有流水线统一使用 Flutter **3.29.3** stable，通过 `--dart-define-from-file=secrets.json` 注入编译时密钥。
+
+### Android 构建流程
+
+1. 解码 `SECRETS_JSON_CONTENT`（base64）→ `secrets.json`
+2. 解码 keystore（`SECRETS_KEYSTORE_BASE64`）→ `upload-keystore.jks`
+3. 从 secrets 生成 `key.properties`
+4. `flutter build apk --dart-define-from-file=secrets.json`
+5. 上传 `app-release.apk` 为 artifact
+
+### Web 构建流程
+
+1. 构建 `flutter build web --release --dart-define-from-file=secrets.json`
+2. 上传 `build/web` 为 artifact
+3. 切换到 `deploy` 分支，清空后放入构建产物，push（自动部署到托管平台）
 
 ## 常见问题
 
@@ -269,6 +609,18 @@ A: 见上文 *"顺序遍历的陷阱"*。多个同级的 `单个-顺序` Config 
 
 **Q: 导入配置 JSON 时提示格式错误？**
 A: 导入时会校验 JSON 中是否包含 `prompt_config` 等必要字段。如果是旧版本导出的配置或手动编辑过的 JSON，请确认结构完整。缺失字段的配置项会自动使用默认值填充，但完全损坏的文件会被拒绝。
+
+**Q: `run_windows.bat` 运行后没有反映代码修改？**
+A: 检查脚本中的 `FLUTTER_ROOT` 是否指向你实际安装的 Flutter SDK 路径。`PROJECT_DIR` 已改为自动定位脚本所在目录（`%~dp0`），不再需要手动修改。如果仍有缓存问题，运行 `run_windows.bat clean` 清除构建缓存后重试。
+
+**Q: V4 Vibe Transfer 怎么用？**
+A: 在「生成配置」→「Vibe Transfer」Tab 中，选择 V4 模型后会自动切换到 V4 界面。支持两种导入方式：直接拖入 PNG 图片（从 iTXt chunk 提取 vibe 编码）或导入 `.naiv4vibe` JSON 文件（包含多档位编码）。
+
+**Q: 角色配置的位置是什么意思？**
+A: NAI V4 模型支持在画面中指定角色位置。每个角色可以设置一个或多个候选位置（网格坐标 A-E × 0-5），生成时随机选取一个。位置信息会编码到 `v4_prompt.char_captions` 中发送给 API。
+
+**Q: `__key__` 变量替换是什么？**
+A: 在 prompt 词条或文件名前缀中使用 `__xxx__` 格式，会自动替换为已保存配置中名为 `xxx` 的 PromptConfig 生成的内容。这样可以在多处复用同一套词条池。
 
 ## 许可证
 

@@ -2,7 +2,7 @@
 setlocal
 
 set "FLUTTER_ROOT=D:\Software\flutter"
-set "PROJECT_DIR=D:\__easyHelper__\NAI\NAI-Generator-Flutter"
+set "PROJECT_DIR=%~dp0"
 
 if not exist "%FLUTTER_ROOT%\bin\flutter.bat" (
   echo Flutter not found at: %FLUTTER_ROOT%
