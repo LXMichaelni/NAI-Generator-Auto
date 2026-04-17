@@ -14,12 +14,13 @@ NovelAI API 的第三方图像生成客户端，核心目标：
 
 - **框架**: Flutter (Dart), SDK >=3.3.4 <4.0.0
 - **架构**: MVVM (ViewModel + ChangeNotifier/Command) + Service Layer + Use Case
-- **DI**: GetIt (Service Locator)
+- **DI**: GetIt (Service Locator)，全局统一，不混用 Provider
 - **持久化**: Hive (本地 KV 存储，UUID 管理多份配置)
 - **网络**: http 包 + IOClient（支持代理）
 - **国际化**: easy_localization (en, zh-CN)
 - **图片处理**: image 包 + archive 包（ZIP 解压）
 - **异步命令**: flutter_command
+- **日志**: LogService（使用 path_provider 获取平台安全路径）
 
 ## 入口与启动方式
 
@@ -38,3 +39,12 @@ NovelAI API 的第三方图像生成客户端，核心目标：
 - `ui/` — 视图层（MVVM，每个功能模块有 view_models/ 和 widgets/）
 
 三主页面：Generation（生图）、Config（Prompt 配置）、Settings（参数设置）
+
+## 架构约束（已落地）
+
+- ViewModel 构造函数不接收 BuildContext，通过方法参数传入
+- builder 回调中不执行副作用（网络请求、状态修改），副作用放在生命周期方法中
+- NavigationView 使用 IndexedStack 缓存页面状态，避免 tab 切换时重建
+- 配置导入时对 JSON 做 schema 校验（检查 `prompt_config` 键存在性），失败时显示错误提示
+- PromptConfig.fromJson 所有字段有 `??` 默认值兜底，不会因缺失字段崩溃
+- i18n 覆盖所有用户可见字符串，不硬编码英文

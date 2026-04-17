@@ -2,7 +2,7 @@
 
 ## 安全风险
 
-- **API Key 明文存储**: `settings.apiKey` 直接存入 Hive，未加密
+- **API Key 明文存储**: `settings.apiKey` 直接存入 Hive，未加密（encrypt 包仅用于 Token 传输层）
 - **SSL 验证关闭**: `badCertificateCallback` 在代理模式下始终返回 `true`
 - **请求头伪装硬编码**: `getHeaders()` 中 referer 和 user-agent 硬编码，NAI 更新可能导致拒绝
 
@@ -25,3 +25,17 @@
 - **Web 平台**: 不支持代理（`kIsWeb` 时 `createHttpClient` 返回 null）
 - **Android**: 需要存储权限（SDK < 29），SaverGallery API 可能随 Android 版本变化
 - **iOS/macOS/Linux**: 目录存在但未充分测试
+
+## 已修复的风险（2026-04-17 代码审查）
+
+以下风险已在本轮修复中消除：
+- ~~SettingsPageViewmodel 订阅未释放导致内存泄漏~~ → 已在 dispose 中释放
+- ~~Provider 和 GetIt 混用~~ → 已统一为 GetIt
+- ~~builder 回调中执行副作用~~ → 已移至生命周期方法
+- ~~PromptConfig.fromJson 缺少 null 安全~~ → 所有字段已加 `??` 默认值
+- ~~NavigationView tab 切换重建页面~~ → 已改用 IndexedStack
+- ~~ViewModel 构造函数接收 BuildContext~~ → 已移除
+- ~~seed 运算符优先级 bug~~ → 已加括号
+- ~~配置导入无 schema 校验~~ → 已加 prompt_config 键检查
+- ~~LogService 使用 Directory.current~~ → 已改用 path_provider
+- ~~CI/CD base64 解码命令 bug~~ → 已修复

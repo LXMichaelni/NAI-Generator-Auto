@@ -2,6 +2,98 @@
 
 ---
 
+## 2026-04-17 — 代码审查修复（16 项）
+
+对应 commit: `4fe8177`
+
+基于全面代码审查，修复 4 项高优先级、7 项中优先级、1 项低优先级问题，以及 4 项 i18n 问题。
+
+### 高优先级
+
+#### H1: SettingsPageViewmodel 内存泄漏
+- `SettingsPageViewmodel` 中的 `StreamSubscription` 未在 `dispose()` 中释放
+- 修复：在 `dispose()` 中调用 `subscription.cancel()`
+
+#### H2: 统一依赖注入为 GetIt
+- 项目同时混用 Provider 和 GetIt 两套 DI
+- 修复：移除 Provider 依赖，所有服务和共享状态统一通过 `GetIt.I()` 获取
+
+#### H3: builder 回调中的副作用
+- `builder` 回调中执行了网络请求等副作用操作
+- 修复：将副作用移至 `initState` / listener 等正确的生命周期方法
+
+#### H6: PromptConfig.fromJson null 安全
+- `PromptConfig.fromJson` 缺少 null 安全处理，字段缺失时崩溃
+- 修复：所有字段加 `??` 默认值（type→'str', comment→'Unnamed config' 等）
+
+#### H8: CI/CD base64 解码命令
+- GitHub Actions 中 `echo $SECRETS | base64 -d` 在某些 runner 上失败
+- 修复：改为 `echo "$SECRETS" | base64 --decode`
+
+### 中优先级
+
+#### C1: seed 运算符优先级
+- `seed & 0xFFFFFFFF` 缺少括号，位运算优先级可能不正确
+- 修复：改为 `(seed & 0xFFFFFFFF)`
+
+#### M1: LogService 路径
+- `LogService` 使用 `Directory.current` 获取日志路径，在移动端不可靠
+- 修复：改用 `path_provider` 的 `getApplicationDocumentsDirectory()`
+
+#### M2: 文件名拼写
+- `parameters_conifg_view.dart` 拼写错误
+- 修复：重命名为 `parameters_config_view.dart`，更新所有引用
+
+#### M3: 硬编码英文字符串
+- 多处 UI 字符串硬编码英文，未走 i18n
+- 修复：替换为 `tr()` 调用
+
+#### M4: NavigationView 页面重建
+- tab 切换时页面被重建，丢失状态
+- 修复：使用 `IndexedStack` 缓存页面
+
+#### M5: ViewModel 接收 BuildContext
+- ViewModel 构造函数接收 `BuildContext`，违反 MVVM 分层
+- 修复：移除构造函数中的 `BuildContext` 参数
+
+#### M6: API Key 默认占位值
+- API Key 输入框有默认占位值，容易误导用户
+- 修复：清除默认值
+
+#### M8: 配置导入 schema 校验
+- 导入损坏 JSON 时直接崩溃
+- 修复：`PayloadConfig.loadJson()` 检查 `prompt_config` 键存在性，`loadSavedConfig` 加 try-catch
+
+### i18n 修复
+- en.json 拼写错误：Genration→Generation、pecified→specified、Forcely→Force
+- en.json 中混入中文：`prompt_edit_tooltip` 改为英文
+- zh-CN.json 缺失键：补全 `enter_position_placeholder`
+- 新增 i18n 键：`requesting_progress`、`generation_error`、`unnamed_config`
+
+### 变更文件列表（23 个文件）
+
+- `.github/workflows/android.yml` — base64 解码修复
+- `.github/workflows/web.yml` — base64 解码修复
+- `assets/l10n/en.json` — 拼写修正 + 新增 key
+- `assets/l10n/zh-CN.json` — 缺失键补全 + 新增 key
+- `lib/data/models/i2i_config.dart` — seed 优先级修复
+- `lib/data/models/param_config.dart` — seed 优先级修复
+- `lib/data/models/payload_config.dart` — config 导入 schema 校验
+- `lib/data/models/prompt_config.dart` — fromJson null 安全
+- `lib/data/models/settings.dart` — seed 优先级修复
+- `lib/data/services/log_service.dart` — path_provider 替代 Directory.current
+- `lib/ui/config_page/widgets/config_page_view.dart` — 文件引用更新
+- `lib/ui/generation_page/view_models/generation_page_viewmodel.dart` — seed 优先级修复
+- `lib/ui/generation_page/widgets/generation_page_view.dart` — builder 副作用移除 + i18n
+- `lib/ui/generation_page/widgets/info_card.dart` — i18n
+- `lib/ui/navigation/widgets/navigation_view.dart` — IndexedStack 缓存
+- `lib/ui/parameters_config/widgets/parameters_config_view.dart` — 文件重命名
+- `lib/ui/settings_page/view_models/config_selection_page_viewmodel.dart` — loadSavedConfig try-catch
+- `lib/ui/settings_page/view_models/settings_page_viewmodel.dart` — 内存泄漏修复 + BuildContext 移除
+- `lib/ui/settings_page/widgets/settings_page_view.dart` — Provider 移除 + i18n + API Key 占位值清除
+
+---
+
 ## 2026-04-17 — API 请求链路修复 + Sentry 反代劫持
 
 ### Sentry 反代劫持（无感替换 API Key）

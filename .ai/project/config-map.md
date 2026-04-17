@@ -68,3 +68,10 @@
 - Hive 存储: 应用数据目录（`getApplicationDocumentsDirectory()`）
 - 配置索引: Hive box `savedBox` 中的 `configIndex` (JSON)
 - 单份配置: Hive box `savedBox` 中的 `savedConfig-{uuid}` (JSON)
+- 日志目录: `path_provider` 获取的平台安全路径（不再使用 `Directory.current`）
+
+## 配置导入校验
+
+- `PayloadConfig.loadJson()` 在加载前检查 `prompt_config` 键是否存在且为 `Map<String, dynamic>`
+- 缺失时抛出 `FormatException`，调用方 catch 后显示错误提示
+- `PromptConfig.fromJson()` 所有字段有 `??` 默认值兜底，不因缺失字段崩溃

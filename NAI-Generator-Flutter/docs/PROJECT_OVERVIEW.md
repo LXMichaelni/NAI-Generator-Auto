@@ -24,9 +24,18 @@
   - `assets/l10n/en.json` / `assets/l10n/zh-CN.json` 文案
 - `docs/` 文档
 
+## 3.1 架构约束
+- DI 统一使用 GetIt（不混用 Provider）
+- ViewModel 构造函数不接收 BuildContext
+- builder 回调中不执行副作用（网络请求、状态修改）
+- NavigationView 使用 IndexedStack 缓存页面状态
+- 配置导入时做 schema 校验（检查 `prompt_config` 键）
+- PromptConfig.fromJson 所有字段有 `??` 默认值兜底
+- 所有用户可见字符串走 i18n（`tr()`），不硬编码
+
 ## 4. 关键依赖（节选）
 - `easy_localization`：多语言
-- `get_it`：依赖注入 / 服务定位器
+- `get_it`：依赖注入 / 服务定位器（全局统一，不混用 Provider）
 - `http`：网络请求
 - `hive`：配置持久化
 - `encrypt`：API Token 本地加密
@@ -103,7 +112,8 @@
 ## 11. 本地化
 - 语言文件：`assets/l10n/en.json`、`assets/l10n/zh-CN.json`
 - 使用 `easy_localization`
-- 当前 i18n key 覆盖：基础 UI、sentry 反代（11 key）、API timeout（2 key）、429 限流（1 key）
+- 当前 i18n key 覆盖：基础 UI、sentry 反代（11 key）、API timeout（2 key）、429 限流（1 key）、生成状态（3 key）
+- 所有用户可见字符串走 `tr()`，不硬编码英文
 
 ## 12. Windows 运行/打包
 - 一键运行：`run_windows.bat`（支持 `clean` 参数清理构建缓存）
@@ -122,3 +132,5 @@
 
 ## 14. 近期改动
 详见 `docs/CHANGES.md`。
+
+最近一次：2026-04-17 代码审查修复（16 项），包括内存泄漏、DI 统一、null 安全、i18n 等。
