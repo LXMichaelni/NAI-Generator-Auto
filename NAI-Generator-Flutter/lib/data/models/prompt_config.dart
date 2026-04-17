@@ -154,24 +154,28 @@ class PromptConfig {
   factory PromptConfig.fromJson(Map<String, dynamic> json) {
     int upper, lower;
     if (json['randomBrackets'] != null) {
-      upper = json['randomBrackets'];
-      lower = -json['randomBrackets'];
+      upper = (json['randomBrackets'] as int?) ?? 0;
+      lower = -((json['randomBrackets'] as int?) ?? 0);
     } else {
-      upper = json['randomBracketsUpper'];
-      lower = json['randomBracketsLower'];
+      upper = (json['randomBracketsUpper'] as int?) ?? 0;
+      lower = (json['randomBracketsLower'] as int?) ?? 0;
     }
 
+    final rawProb = json['prob'];
+    final prob = rawProb is int
+        ? rawProb.toDouble()
+        : (rawProb as double?) ?? 0.0;
+
     return PromptConfig(
-      selectionMethod: json['selectionMethod'],
-      shuffled: json['shuffled'],
-      prob:
-          json['prob'] is int ? (json['prob'] as int).toDouble() : json['prob'],
-      num: json['num'],
-      randomBracketsUpper: upper.toInt(),
-      randomBracketsLower: lower.toInt(),
-      type: json['type'],
-      comment: json['comment'],
-      filter: json['filter'],
+      selectionMethod: json['selectionMethod'] ?? 'all',
+      shuffled: json['shuffled'] ?? true,
+      prob: prob,
+      num: json['num'] ?? 1,
+      randomBracketsUpper: upper,
+      randomBracketsLower: lower,
+      type: json['type'] ?? 'str',
+      comment: json['comment'] ?? 'Unnamed config',
+      filter: json['filter'] ?? '',
       strs:
           (json['strs'] as List<dynamic>?)?.map((e) => e as String).toList() ??
               [],

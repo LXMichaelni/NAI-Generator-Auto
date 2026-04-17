@@ -34,7 +34,7 @@ class InfoCard extends StatelessWidget {
           // Loading
           return ListTile(
             leading: const CircularProgressIndicator(),
-            title: Text('Requesting $current/$total ...'),
+            title: Text(tr('requesting_progress', namedArgs: {'current': current, 'total': total})),
           );
         } else {
           // Result

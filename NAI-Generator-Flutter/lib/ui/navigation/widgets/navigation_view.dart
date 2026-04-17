@@ -30,6 +30,12 @@ class NavigationViewState extends State<NavigationView> {
 
   DateTime? _lastBackButtonPressTime;
 
+  late final List<Widget> _pages = [
+    GenerationPageView(viewmodel: GetIt.I()),
+    ConfigPageView(viewmodel: ConfigPageViewmodel()),
+    const SettingsPageView(),
+  ];
+
   void _changeIndex(int value) {
     widget.viewModel.changeIndex(value);
     setState(() {
@@ -74,13 +80,6 @@ class NavigationViewState extends State<NavigationView> {
   }
 
   Widget getBody() {
-    final pages = [
-      GenerationPageView(viewmodel: GetIt.I()),
-      ConfigPageView(
-        viewmodel: ConfigPageViewmodel(),
-      ),
-      SettingsPageView(),
-    ];
     final content = LayoutBuilder(
       builder: (context, constraints) {
         // 使用 LayoutBuilder 来监听父容器的宽度变化
@@ -106,14 +105,24 @@ class NavigationViewState extends State<NavigationView> {
                       label: Text(context.tr('settings'))),
                 ],
               ),
-              Expanded(child: pages[_currentIndex]), // 内容区域
+              Expanded(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: _pages,
+                ),
+              ), // 内容区域
             ],
           );
         } else {
           // 纵向布局 (Column - BottomNavigationBar)
           return Column(
             children: [
-              Expanded(child: pages[_currentIndex]), // 内容区域
+              Expanded(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: _pages,
+                ),
+              ), // 内容区域
               BottomNavigationBar(
                 currentIndex: _currentIndex,
                 items: [

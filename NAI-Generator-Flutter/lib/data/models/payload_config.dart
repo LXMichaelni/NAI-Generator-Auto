@@ -89,6 +89,11 @@ class PayloadConfig {
   }
 
   void loadJson(Map<String, dynamic> jsonData) {
+    // Validate required key exists
+    if (!jsonData.containsKey('prompt_config') ||
+        jsonData['prompt_config'] is! Map<String, dynamic>) {
+      throw FormatException('Invalid config: missing "prompt_config" key');
+    }
     final jsonCharacterList = jsonData.containsKey('character_config')
         ? jsonData['character_config'] as List<dynamic>
         : [];

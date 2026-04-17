@@ -7,38 +7,47 @@ import 'package:nai_casrand/core/constants/settings.dart';
 import 'package:nai_casrand/ui/settings_page/view_models/settings_page_viewmodel.dart';
 import 'package:nai_casrand/ui/core/widgets/editable_list_tile.dart';
 import 'package:nai_casrand/ui/settings_page/widgets/config_selection_page_view.dart';
-import 'package:provider/provider.dart';
+import 'package:nai_casrand/ui/core/utils/flushbar.dart';
 
 import '../../../core/constants/defaults.dart';
 
-class SettingsPageView extends StatelessWidget {
+class SettingsPageView extends StatefulWidget {
+  const SettingsPageView({super.key});
+
+  @override
+  State<SettingsPageView> createState() => _SettingsPageViewState();
+}
+
+class _SettingsPageViewState extends State<SettingsPageView> {
   final SettingsPageViewmodel viewmodel = SettingsPageViewmodel();
 
-  SettingsPageView({super.key});
+  @override
+  void dispose() {
+    viewmodel.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final content = ChangeNotifierProvider.value(
-      value: viewmodel,
-      child: Consumer<SettingsPageViewmodel>(
-        builder: (context, viewmodel, child) => Column(
-          children: [
-            _buildApiKeyTile(),
-            _buildSentryProxyTile(context),
-            _buildBatchTile(),
-            _buildEraseMetadataTile(context),
-            if (!kIsWeb && Platform.isWindows) _buildOutputSelectionTile(),
-            _buildPrefixKeyTile(),
-            if (!kIsWeb) _buildProxyTile(context),
-            _buildBarkTokenTile(),
-            _buildBarkAuthFailTile(),
-            _buildBarkAuthFailCooldownTile(),
-            const Divider(),
-            _buildSavedConfigTile(context),
-            _buildThemeModeTile(context),
-            _buildLanguageTile(context),
-          ],
-        ),
+    final content = ListenableBuilder(
+      listenable: viewmodel,
+      builder: (context, child) => Column(
+        children: [
+          _buildApiKeyTile(),
+          _buildSentryProxyTile(context),
+          _buildBatchTile(),
+          _buildEraseMetadataTile(context),
+          if (!kIsWeb && Platform.isWindows) _buildOutputSelectionTile(),
+          _buildPrefixKeyTile(),
+          if (!kIsWeb) _buildProxyTile(context),
+          _buildBarkTokenTile(),
+          _buildBarkAuthFailTile(),
+          _buildBarkAuthFailCooldownTile(),
+          const Divider(),
+          _buildSavedConfigTile(context),
+          _buildThemeModeTile(context),
+          _buildLanguageTile(context),
+        ],
       ),
     );
 
@@ -122,7 +131,15 @@ class SettingsPageView extends StatelessWidget {
             child: TextButton.icon(
               icon: const Icon(Icons.network_ping),
               label: Text(tr('sentry_proxy_test')),
-              onPressed: () => viewmodel.testSentryProxy(context),
+              onPressed: () async {
+                final result = await viewmodel.testSentryProxy();
+                if (!context.mounted) return;
+                if (result.ok) {
+                  showInfoBar(context, result.message);
+                } else {
+                  showErrorBar(context, result.message);
+                }
+              },
             ),
           ),
         ),

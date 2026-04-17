@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
 class LogService {
   static final LogService _instance = LogService._();
   factory LogService() => _instance;
@@ -14,9 +16,9 @@ class LogService {
     try {
       final now = DateTime.now();
       final fileName = _formatFileName(now);
-      final rootDir = _findProjectRoot(Directory.current) ?? Directory.current;
+      final appDir = await getApplicationSupportDirectory();
       final logsDir = Directory(
-        '${rootDir.path}${Platform.pathSeparator}logs',
+        '${appDir.path}${Platform.pathSeparator}logs',
       );
       await logsDir.create(recursive: true);
       _logFile = File('${logsDir.path}${Platform.pathSeparator}$fileName.log');
@@ -44,18 +46,6 @@ class LogService {
     } catch (_) {
       // Ignore write errors.
     }
-  }
-
-  Directory? _findProjectRoot(Directory start) {
-    var dir = start;
-    for (var i = 0; i < 6; i++) {
-      final pubspec = File('${dir.path}${Platform.pathSeparator}pubspec.yaml');
-      if (pubspec.existsSync()) return dir;
-      final parent = dir.parent;
-      if (parent.path == dir.path) break;
-      dir = parent;
-    }
-    return null;
   }
 
   String _formatFileName(DateTime dt) {

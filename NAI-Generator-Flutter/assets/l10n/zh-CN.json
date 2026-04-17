@@ -47,6 +47,7 @@
     "delete_config": "删除 Config",
     "enter_position": "选择位置",
     "notice_enter_positon": "0 → 开头；留空 → 末尾",
+    "enter_position_placeholder": "位置",
     "toggle_config_enable": "启用/禁用 Config",
     "toggle_compact_view": "切换紧凑视图",
     "NAI_API_key": "NAI API Token",
@@ -198,5 +199,8 @@
     "last_modified": "最后保存时间：{time}",
     "rate_limit_429": "请求频率受限 (429)，请稍后再试。",
     "api_timeout": "API 请求超时时间（秒）",
-    "api_timeout_hint": "0 = 无限等待"
+    "api_timeout_hint": "0 = 无限等待",
+    "requesting_progress": "正在请求 {current}/{total} ...",
+    "generation_error": "生成过程中发生错误。",
+    "unnamed_config": "未命名配置"
 }

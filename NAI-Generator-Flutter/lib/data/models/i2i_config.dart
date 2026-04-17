@@ -41,7 +41,7 @@ class I2IConfig with ChangeNotifier {
       imageB64: imageB64!,
       strength: strength,
       noise: noise,
-      extraNoiseSeed: Random().nextInt(1 << 32 - 1),
+      extraNoiseSeed: Random().nextInt((1 << 32) - 1),
       overridePrompts: overridePrompt,
     );
   }

@@ -59,10 +59,16 @@ class ConfigSelectionPageViewmodel extends ChangeNotifier {
       deleteConfig(context, uuid);
       return;
     }
-    payloadConfig.loadJson(jsonData);
-    configService.currentUuid = uuid;
-    notifyListeners();
-    showInfoBar(context, '${tr('info_load_saved_config')}${tr('succeed')}');
+    try {
+      payloadConfig.loadJson(jsonData);
+      configService.currentUuid = uuid;
+      notifyListeners();
+      showInfoBar(context, '${tr('info_load_saved_config')}${tr('succeed')}');
+    } catch (error) {
+      if (!context.mounted) return;
+      showErrorBar(context,
+          '${tr('info_load_saved_config')}${tr('failed')}: ${error.toString()}');
+    }
   }
 
   void saveConfigAsFile(BuildContext context, String uuid) {

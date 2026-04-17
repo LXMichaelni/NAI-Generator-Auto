@@ -223,7 +223,7 @@ class GenerationPageViewmodel extends ChangeNotifier {
         await _logIfRateLimitError(e, alreadyLogged: rateLimitLogged);
         await _logIfHandshakeError(e);
         return InfoCardContent(
-          title: 'Error occurred in generation process.',
+          title: tr('generation_error'),
           info: e.toString(),
           additionalInfo: digestPayloadResult(payloadResult),
         );

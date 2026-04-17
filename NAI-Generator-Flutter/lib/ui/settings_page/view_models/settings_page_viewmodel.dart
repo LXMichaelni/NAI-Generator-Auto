@@ -41,7 +41,7 @@ class SettingsPageViewmodel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> testSentryProxy(BuildContext context) async {
+  Future<({bool ok, String message})> testSentryProxy() async {
     final base = payloadConfig.settings.sentryProxyBaseUrl
         .replaceAll(RegExp(r'/+$'), '');
     final url = Uri.parse('$base/token');
@@ -49,18 +49,15 @@ class SettingsPageViewmodel extends ChangeNotifier {
       final resp = await http
           .get(url)
           .timeout(const Duration(seconds: 3));
-      if (!context.mounted) return;
       if (resp.statusCode == 200 && resp.body.trim().isNotEmpty) {
         final preview = resp.body.trim();
         final short = preview.length > 20 ? '${preview.substring(0, 20)}...' : preview;
-        showInfoBar(context, '${tr('sentry_proxy_test_ok')} ($short)');
+        return (ok: true, message: '${tr('sentry_proxy_test_ok')} ($short)');
       } else {
-        showErrorBar(
-            context, '${tr('sentry_proxy_test_fail')}: HTTP ${resp.statusCode}');
+        return (ok: false, message: '${tr('sentry_proxy_test_fail')}: HTTP ${resp.statusCode}');
       }
     } catch (e) {
-      if (!context.mounted) return;
-      showErrorBar(context, '${tr('sentry_proxy_test_fail')}: $e');
+      return (ok: false, message: '${tr('sentry_proxy_test_fail')}: $e');
     }
   }
 

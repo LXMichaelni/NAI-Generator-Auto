@@ -85,7 +85,7 @@ class Settings {
   factory Settings.fromJson(Map<String, dynamic> json) {
     return Settings(
       welcomeMessageVersion: json['welcome_message_version'] ?? '',
-      apiKey: json['api_key'] ?? 'pst-abcd',
+      apiKey: json['api_key'] ?? '',
       outputFolderPath: json['output_folder'] ?? '',
       proxy: json['proxy'] ?? '',
       debugApiEnabled: false,

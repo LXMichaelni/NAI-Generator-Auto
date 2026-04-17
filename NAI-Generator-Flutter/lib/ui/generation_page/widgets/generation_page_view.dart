@@ -7,10 +7,57 @@ import 'package:nai_casrand/ui/generation_page/view_models/generation_page_viewm
 import 'package:nai_casrand/ui/core/widgets/slider_list_tile.dart';
 import 'package:waterfall_flow/waterfall_flow.dart';
 
-class GenerationPageView extends StatelessWidget {
+class GenerationPageView extends StatefulWidget {
   final GenerationPageViewmodel viewmodel;
 
   const GenerationPageView({super.key, required this.viewmodel});
+
+  @override
+  State<GenerationPageView> createState() => _GenerationPageViewState();
+}
+
+class _GenerationPageViewState extends State<GenerationPageView> {
+  GenerationPageViewmodel get viewmodel => widget.viewmodel;
+
+  @override
+  void initState() {
+    super.initState();
+    viewmodel.cooldownDelaySec.addListener(_onCooldownChanged);
+    viewmodel.innerDelaySec.addListener(_onInnerDelayChanged);
+  }
+
+  @override
+  void dispose() {
+    viewmodel.cooldownDelaySec.removeListener(_onCooldownChanged);
+    viewmodel.innerDelaySec.removeListener(_onInnerDelayChanged);
+    super.dispose();
+  }
+
+  void _onCooldownChanged() {
+    final sec = viewmodel.cooldownDelaySec.value;
+    if (sec == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showInfoBar(
+        context,
+        tr('cooldown_wait_notice', namedArgs: {'sec': sec.toString()}),
+      );
+    });
+    viewmodel.clearCooldownDelayNotice();
+  }
+
+  void _onInnerDelayChanged() {
+    final sec = viewmodel.innerDelaySec.value;
+    if (sec == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showInfoBar(
+        context,
+        tr('inner_wait_notice', namedArgs: {'sec': sec.toString()}),
+      );
+    });
+    viewmodel.clearInnerDelayNotice();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +78,7 @@ class GenerationPageView extends StatelessWidget {
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(
@@ -122,37 +169,9 @@ class GenerationPageView extends StatelessWidget {
         ),
       ],
     );
-    return ListenableBuilder(
-      listenable: Listenable.merge(
-          [viewmodel.cooldownDelaySec, viewmodel.innerDelaySec]),
-      builder: (context, child) {
-        final cooldownDelaySec = viewmodel.cooldownDelaySec.value;
-        final innerDelaySec = viewmodel.innerDelaySec.value;
-        if (cooldownDelaySec != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            showInfoBar(
-              context,
-              tr('cooldown_wait_notice',
-                  namedArgs: {'sec': cooldownDelaySec.toString()}),
-            );
-            viewmodel.clearCooldownDelayNotice();
-          });
-        }
-        if (innerDelaySec != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            showInfoBar(
-              context,
-              tr('inner_wait_notice',
-                  namedArgs: {'sec': innerDelaySec.toString()}),
-            );
-            viewmodel.clearInnerDelayNotice();
-          });
-        }
-        return Scaffold(
-          body: content,
-          floatingActionButton: buttons,
-        );
-      },
+    return Scaffold(
+      body: content,
+      floatingActionButton: buttons,
     );
   }
 
