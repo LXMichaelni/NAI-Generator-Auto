@@ -35,16 +35,18 @@ class SettingsPageViewmodel extends ChangeNotifier {
   }
 
   void setSentryProxyBaseUrl(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return;
-    payloadConfig.settings.sentryProxyBaseUrl = trimmed;
+    final sanitized = sanitizeBaseUrl(value);
+    if (sanitized.isEmpty) return;
+    payloadConfig.settings.sentryProxyBaseUrl = sanitized;
     notifyListeners();
   }
 
   Future<({bool ok, String message})> testSentryProxy() async {
-    final base = payloadConfig.settings.sentryProxyBaseUrl
-        .replaceAll(RegExp(r'/+$'), '');
+    final base = sanitizeBaseUrl(payloadConfig.settings.sentryProxyBaseUrl);
     final url = Uri.parse('$base/token');
+    if (url.host.isEmpty) {
+      return (ok: false, message: '${tr('sentry_proxy_test_fail')}: URL 格式错误 ($base)');
+    }
     try {
       final resp = await http
           .get(url)

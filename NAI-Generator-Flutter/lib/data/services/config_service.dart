@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -46,6 +47,8 @@ class ConfigService {
   late String currentUuid;
   late Map<String, SavedConfigInfo> configIndex;
 
+  Timer? _saveDebounce;
+
   Future<String> loadDefaultConfig() async {
     return await rootBundle.loadString('assets/json/example.json');
   }
@@ -71,7 +74,7 @@ class ConfigService {
     // Set current UUID
     if (savedUuid == null) {
       currentUuid = const Uuid().v4();
-      saveConfig(json.decode(jsonData));
+      saveConfigImmediate(json.decode(jsonData));
     } else {
       currentUuid = savedUuid;
     }
@@ -88,6 +91,18 @@ class ConfigService {
   }
 
   Future<void> saveConfig(Map<String, dynamic> jsonData) async {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 500), () {
+      _writeToDisk(jsonData);
+    });
+  }
+
+  void saveConfigImmediate(Map<String, dynamic> jsonData) {
+    _saveDebounce?.cancel();
+    _writeToDisk(jsonData);
+  }
+
+  void _writeToDisk(Map<String, dynamic> jsonData) {
     saveBox.put('savedUuid', currentUuid);
     saveConfigByUuid(currentUuid, jsonData);
   }

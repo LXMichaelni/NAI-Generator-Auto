@@ -125,8 +125,7 @@ class GenerationPageViewmodel extends ChangeNotifier {
       final String endpoint;
       final String requestProxy;
       if (payloadConfig.settings.sentryProxyEnabled) {
-        final base = payloadConfig.settings.sentryProxyBaseUrl
-            .replaceAll(RegExp(r'/+$'), '');
+        final base = payloadConfig.settings.sentryProxyBaseUrl;
         endpoint = '$base/ai/generate-image';
         requestProxy = ''; // 反代启用时 sentry 承担 VPN 出网, 本次请求不走自身代理
       } else if (payloadConfig.settings.debugApiEnabled) {

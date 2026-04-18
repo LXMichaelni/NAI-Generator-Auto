@@ -3,6 +3,18 @@ import 'package:nai_casrand/core/constants/settings.dart';
 
 import '../../core/constants/defaults.dart';
 
+final _singleSlashScheme = RegExp(r'^(https?:/)([^/])');
+final _spacedColon = RegExp(r':\s+');
+final _trailingSlashes = RegExp(r'/+$');
+
+String sanitizeBaseUrl(String raw) {
+  var url = raw.trim();
+  url = url.replaceFirstMapped(_singleSlashScheme, (m) => '${m[1]}/${m[2]}');
+  url = url.replaceAll(_spacedColon, ':');
+  url = url.replaceAll(_trailingSlashes, '');
+  return url;
+}
+
 class Settings {
   // Don't show again
   String welcomeMessageVersion;
@@ -92,7 +104,7 @@ class Settings {
       debugApiPath: 'http://localhost:5000/ai/generate-image',
       sentryProxyEnabled: json['sentry_proxy_enabled'] ?? false,
       sentryProxyBaseUrl:
-          json['sentry_proxy_base_url'] ?? 'http://localhost:7899',
+          sanitizeBaseUrl(json['sentry_proxy_base_url'] ?? 'http://localhost:7899'),
       metadataEraseEnabled: json['metadata_erase_enabled'] ?? false,
       customMetadataEnabled: json['custom_metadata_enabled'] ?? false,
       customMetadataContent:
